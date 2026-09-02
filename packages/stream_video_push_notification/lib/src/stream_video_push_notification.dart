@@ -384,11 +384,13 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
       _subscriptions.cancel(_idToken);
     }
 
-    final apnToken = await StreamTokenProvider.getAPNToken(
-      tokenProvider: apnTokenProvider,
-    );
-    if (apnToken != null) {
-      await _client.deleteDevice(id: apnToken);
+    if (CurrentPlatform.isIos && registerApnDeviceToken) {
+      final apnToken = await StreamTokenProvider.getAPNToken(
+        tokenProvider: apnTokenProvider,
+      );
+      if (apnToken != null) {
+        await _client.deleteDevice(id: apnToken);
+      }
     }
 
     await removedStoredTokens();
