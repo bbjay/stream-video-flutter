@@ -3,6 +3,11 @@ part of 'stream_video_push_notification.dart';
 /// Signature for a function that creates a [Stream] of push tokens.
 typedef TokenStreamProvider = Stream<String> Function();
 
+/// Signature for a function that resolves a single push token.
+///
+/// Return `null` (or an empty string) when no token is available.
+typedef TokenProvider = Future<String?> Function();
+
 final class StreamVideoPushProvider {
   /// Creates a new push provider.
   const StreamVideoPushProvider({
@@ -82,11 +87,21 @@ final class StreamTokenProvider {
         .map((event) => event.token);
   }
 
-  static Future<String?> getAPNToken() async {
+  /// The default provider for the APN (non-VoIP) device token, resolving it
+  /// through `FirebaseMessaging`.
+  static Future<String?> firebaseApnTokenProvider() =>
+      FirebaseMessaging.instance.getAPNSToken();
+
+  /// Gets the current APN (non-VoIP) push token for the device.
+  ///
+  /// By default the token is resolved with [firebaseApnTokenProvider]. Pass a
+  /// [tokenProvider] to supply the token yourself, for example when the token
+  /// is obtained natively or without using Firebase Messaging at all.
+  static Future<String?> getAPNToken({TokenProvider? tokenProvider}) async {
     if (!CurrentPlatform.isIos) return null;
 
-    final token = await FirebaseMessaging.instance.getAPNSToken();
-    if (token is! String || token.isEmpty) return null;
+    final token = await (tokenProvider ?? firebaseApnTokenProvider)();
+    if (token == null || token.isEmpty) return null;
 
     return token;
   }

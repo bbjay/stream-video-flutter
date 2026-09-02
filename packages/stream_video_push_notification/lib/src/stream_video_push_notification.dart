@@ -77,6 +77,7 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
     required this.androidPushProvider,
     required this.pushConfiguration,
     this.registerApnDeviceToken = false,
+    this.apnTokenProvider,
   }) : _client = client {
     if (!CurrentPlatform.isMobile) return;
 
@@ -256,6 +257,22 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
   static const userDeviceTokenVoIPKey = 'io.getstream.userDeviceTokenVoIP';
 
   /// Factory for creating a new instance of [StreamVideoPushNotificationManager].
+  ///
+  /// Set [registerApnDeviceToken] to also register the iOS APN (non-VoIP)
+  /// device token, which is resolved through `FirebaseMessaging` by default.
+  /// Provide [apnTokenProvider] to supply that token yourself instead, for
+  /// example when it is obtained natively or without Firebase Messaging:
+  ///
+  /// ```dart
+  /// StreamVideoPushNotificationManager.create(
+  ///   iosPushProvider: const StreamVideoPushProvider.apn(name: 'flutter-apn'),
+  ///   androidPushProvider: const StreamVideoPushProvider.firebase(
+  ///     name: 'flutter-firebase',
+  ///   ),
+  ///   registerApnDeviceToken: true,
+  ///   apnTokenProvider: () async => myApnToken,
+  /// );
+  /// ```
   static StreamVideoPushNotificationManager Function(
     CoordinatorClient client,
     StreamVideo streamVideo,
@@ -265,6 +282,7 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
     required StreamVideoPushProvider androidPushProvider,
     StreamVideoPushConfiguration? pushConfiguration,
     bool registerApnDeviceToken = false,
+    TokenProvider? apnTokenProvider,
   }) {
     return (CoordinatorClient client, StreamVideo streamVideo) {
       final configuration = _defaultPushConfiguration.merge(pushConfiguration);
@@ -278,6 +296,7 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
         androidPushProvider: androidPushProvider,
         pushConfiguration: configuration,
         registerApnDeviceToken: registerApnDeviceToken,
+        apnTokenProvider: apnTokenProvider,
       );
     };
   }
@@ -287,6 +306,12 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
   final StreamVideoPushProvider androidPushProvider;
   final StreamVideoPushConfiguration pushConfiguration;
   final bool registerApnDeviceToken;
+
+  /// Resolves the APN (non-VoIP) device token registered when
+  /// [registerApnDeviceToken] is enabled.
+  ///
+  /// When `null`, the token is resolved through `FirebaseMessaging`.
+  final TokenProvider? apnTokenProvider;
   late SharedPreferences _sharedPreferences;
 
   final _logger = taggedLogger(tag: 'SV:PNManager');
@@ -329,7 +354,9 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
     }
 
     if (CurrentPlatform.isIos && registerApnDeviceToken) {
-      StreamTokenProvider.getAPNToken().then((token) {
+      StreamTokenProvider.getAPNToken(
+        tokenProvider: apnTokenProvider,
+      ).then((token) {
         if (token != null) {
           registerDevice(token, false);
         }
@@ -357,7 +384,9 @@ class StreamVideoPushNotificationManager implements PushNotificationManager {
       _subscriptions.cancel(_idToken);
     }
 
-    final apnToken = await StreamTokenProvider.getAPNToken();
+    final apnToken = await StreamTokenProvider.getAPNToken(
+      tokenProvider: apnTokenProvider,
+    );
     if (apnToken != null) {
       await _client.deleteDevice(id: apnToken);
     }
